@@ -18,3 +18,6 @@ __Data Source:__ *https://www.kaggle.com/datasets/hashroot97/carpriceprediction*
 - __Task 4:__ Build a linear regression model and interpret model summary statistics 
 - __Task 5:__ Plot and analyze model residuals 
 - __Task 6:__ Predict future values and calculate model error metrics
+
+### The Markdown is titled *Linear Regression Model in R.Rmd*".
+### The knit-to-word document is titled *Linear-Regression-Model-in-R.docx*.
