@@ -1,0 +1,314 @@
+---
+title: "Linear Regression Model in R"
+author: "Ariel Felices"
+date: "6/7/2022"
+output: word_document
+---
+
+
+# Building and analysing linear regression model in R
+This project is for people who are interested in building a linear regression model on real world data set and analyze the model's performance in R.
+
+In this project, we will learn:
+1. How to load and clean a real world data set. 
+2. How to build a linear regression model and create various plots to analyze the model's performance.
+3. How to predict future values using this model.
+
+We don't need to be a data science expert to complete this project, but we should be familiar with basic ggplot commands.
+
+
+### Load R libraries
+```{r}
+library(sjPlot)
+library(dplyr)
+library(sjlabelled)
+library(sjmisc)
+library(ggplot2)
+theme_set(theme_sjplot())
+```
+
+## Task 1 - Load dataset and summarize it
+Our dataset file is called cars.csv, which contains cars characteristics and their price in the U.S. We will load this file in R as a data frame using read.csv() function.
+```{r}
+data <- read.csv("cars.csv", header = TRUE, stringsAsFactors = FALSE)
+# To ensure our character columns are not converted to factors by
+# default, we have set the parameter stringsAsFactors to False.
+```
+
+Let's look at the first few rows of the data set using the head function.
+```{r}
+head(data)
+```
+
+We can see various columns like Make, Model, Engine HP and Cylinders. This will print the first six rows of our dataset. The last column is the price, which will be the response variable for our model. Let's look at the data types of each column using the string function.
+```{r}
+str(data)
+```
+We can see there are 11,914 rows and 16 characteristics as columns. The data types of each columns are correct, which is due to the parameter stringsAsFactors set to False. Lastly, we can summarize each column using the summary() function, which gives descriptive statistics of each column.
+```{r}
+summary(data)
+```
+We can see statistics value such as mean and median are calculated for numeric columns but not for character columns.
+
+
+## Task 2 - Clean our dataset
+In this task, we will clean our dataset that we loaded in the previous task. Prior to building any machine learning model, our data sets should be accurate, reliable and robust. To achieve this, we should remove leading or trailing whitespaces in all cells, remove columns with high number of missing values and remove rows containing missing values.
+```{r}
+# Remove the leading or trailing whitespaces in all cells.
+# We can only do this operation on character columns. Thus, we
+# should identify all character columns in our data set.
+cols <- names(data[vapply(data, is.character, logical(1))])
+```
+
+Here we're collecting the names of all columns that returned True for the function is.character. Next, we will apply the function trimws() to remove leading and trailing whitespaces in these character columns.
+```{r}
+data[, cols] <- lapply(data[,cols], trimws)
+```
+
+Missing values are always present in real world data sets, so we should know to deal with them. For this project, we will delete them. By default R will convert empty values to missing value equivalent NA but sometimes we can have manual entry for missing values as N/A our data set.
+
+So let's convert these manual entries to R's version of missing values.
+```{r}
+data[data=="N/A"] = NA
+```
+
+Now we can count the average number of missing values in each column using the mean() and is.na() function.
+```{r}
+sapply(data, function(x) mean(is.na(x)))
+```
+
+Here, sapply() is like a for loop, which goes to each column in our dataset and applies the functions to it.
+In the output we will notice the column "Market.Category" has high number off missing values, roughly 31.4%. It would be wise to remove this column in this case, but we should always be concerned about which column we are removing as it could be an important column.
+```{r}
+data$Market.Category <- NULL
+```
+
+Lastly, we can remove rows that contain one or more empty values. This will ensure that our dataset is complete.
+```{r}
+data <- data[complete.cases(data), ]
+```
+
+Here, the function complete.cases() returns rows that have no missing values. 
+```{r}
+head(data)
+```
+
+We will notice that the number of observations now stand at 11,815 and the number of columns stand at 15.
+
+*Note:* We can also view our dataset by clicking on the data variable in the Environment pane in RStudio.
+
+
+## Task 3 - Split into training and test set
+In this task we will split our data set into training and test set to build our model. 
+One of the most important steps in machine learning is to create in our model on a training set that is separate and distinct from the test set for which we will gauge its accuracy.
+Failure to do so will result in a model that may not generalize to unseen or future data set.
+
+First we should select only numeric columns from our data set for a linear regression model. We can do this using select_if() function.
+```{r}
+data_num <- data %>% select_if(is.numeric)
+```
+
+This will select numeric columns and store the result in a data_num variable. Our target variable for machine learning model is the price column, which is called MSRP.
+
+We can create a histogram of its values to see the distribution.
+```{r}
+hist(data_num$MSRP, breaks = 100)
+```
+
+The histogram tells us that there are some outliers in our column as the majority of cars have the price in the region of 0 in x-axis.
+
+These outliers can cause issues in your model.
+So we will filter our dataset to include cars with price range between 15,000 and 50,000.
+
+```{r}
+data_num <- data_num %>% 
+  filter(MSRP>15000) %>% 
+  filter(MSRP<50000)
+```
+
+```{r}
+head(data_num)
+```
+
+Now our dataset contains around 8000 cars and 8 columns.
+
+Now let's split our dataset into training and test set. To get consistent results and to make sure our partitions are reproducible, we set the seed to any integer.
+
+Next, we will select 80% of our data set as training and remaining 20% as test. To do so, we will get the number of rows that account for 80%. We will use the floor() function to round up the calculation to an integer.
+```{r}
+set.seed(123)
+size <- floor(0.8 * nrow(data_num))
+```
+
+Next, we will use the sample() function to randomly select 80% of rows from our dataset and store the row numbers or indices.
+```{r}
+train_ind <- sample(seq_len(nrow(data_num)), size = size)
+```
+
+To get the training set, we can filter our dataset to include the row numbers.
+```{r}
+train <- data_num[train_ind, ]
+```
+```{r}
+head(train)
+```
+
+To get the test set, we can filter our dataset to ignore the row numbers.
+```{r}
+test <- data_num[-train_ind, ]
+```
+```{r}
+head(test)
+```
+
+We will notice that our training set contains 6392 observations, and your test contained roughly 1600 observations.
+
+
+## Task 4 - Fit linear regression model and interpret model summary statistics
+In this task, we will build a linear regression model and interpret model summary statistics.
+
+A linear regression model is a model that assumes a linear relationship between the predictors and the response variable. This means that the response variable can be calculated from a linear combination of the predictors. 
+
+In our numeric dataset, the response variable is *MSRP* column while the remaining columns serves as the predictors. 
+
+Our aim is to build a model to predict the *MSRP* column, using the car characteristics such as *Engine HP*, *number of doors*, et cetera.
+
+To build a linear regression model, we will use the *lm()* function.
+We will focus on two parameters - **the model equation** and **the dataset** to be used. 
+Model equation can be written in terms of column names while the dataset we will be using will be the training dataset.
+```{r}
+model <- lm(MSRP ~ ., data = train)
+```
+
+Here we're specifying the MSRP column as the response variable while all other columns (represented by dot, .) are predictors. 
+The model is built and stored in a variable called model.
+To see the summary of our model, we can use the *summary()* function on the model.
+```{r}
+summary(model)
+```
+
+The *Call* shows the function call used to compute the regression model. The *Residuals* provide the quick view of the distribution of the residuals, which by definition have a mean zero.
+
+The critical part of the summary are the *Coefficients*. This shows the regression **beta coefficients** and their statistical significance. Predictor variables that are significantly associated with outcome variable are marked by stars. The higher the number of stars, the most significant predictors are.
+
+For a given predictor value, the coefficient, which is called the *Estimate*, can be interpreted as the average effect on the response variable of 1 unit increase in predictor, given that all other predictors are fixed.
+
+For example, if the engine horsepower increases by one unit and all other predictors are kept constant, the price of the car will increase by 111 units.
+
+The *Residual Standard Error (RSE)*, *R- squared*, and the *F-statistics* are metrics that are used to check how well the model fits to our data.
+
+*Residual Standard Error (RSE)* corresponds to the prediction error in our training set and represents roughly the average difference between the observed values and the predicted values
+by the model.
+
+In this model, the *Residual Standard Error (RSE)* is 5495. That means on average, you can expect a deviation of 5495 in the price prediction.
+
+The *R-squared* ranges from 0 to 1 and represents the proportion of the variation in the response variable that can be explained by the model predictor variables.
+
+The higher the *R-squared* value, the better the model is. However, a problem with the *R-squared* is that it will always increase when more predictors are added to the model even if those predictors are only weakly associated with the outcome or the response variable.
+
+A solution is to adjust the *R-squared* value by taking into account the number of predictor variables. The adjustment in the *Adjusted R-squared* value in the summary output is a correction for the number of predictor variables included in the model. So we mainly considere the *Adjusted
+R-squared* value.
+
+Our value is 0.59 which is good. The *F-statistic* gives the overall significance of the model. It assesses whether at least one predictor value or variable has a non zero coefficient. The P-value of less than 10 to the power -16 shows that the model is highly significant. 
+
+We can also plot the estimates for a better visual interpretation. We can use the plot_model() function for this purpose.
+```{r}
+plot_model(model, show.values = TRUE, value.offset = 0.2)
+```
+This plot shows us the coefficients and the significance value.
+
+Lastly, we can build a linear regression model by explicitly specifying the predictors that we want. For example, we may wish to include only three predictors rather than all from your numeric
+dataset. The syntax is similar, but we explicitly type out the predictors names.
+```{r}
+model2 <- lm(MSRP ~ Engine.HP + highway.MPG + Engine.Cylinders,
+           data = train)
+```
+Now, a second model has been created.
+
+
+## Task 5 - Plot and analyse model residuals
+In this task, we will plot and analyze the model residuals. Residuals could show how poorly a model represents data. Residuals are leftover values of the response variable after a fitting a model to data and they could reveal unexplained patterns in the data by the fitted model.
+Using this information, not only could we check if linear regression assumptions are met, but we could improve our model as well.
+
+The plot function in R can work on linear regression models. It creates 4 diagnostic plots, each showing the residuals in different ways. To show all 4 plots in one plot, you can change the options of plotting.
+```{r}
+par(mfrow=c(2,2))
+```
+
+This will set the plotting pane to include 4 plots as 2 rows and 2 columns. Next simply call the plot function on the model.
+```{r}
+plot(model)
+```
+This will create 4 plots. Now let's investigate each of them.
+
+We'll often see numbers next to some points in each plots. These are extreme values based on each criterion, and are identified by the row numbers in the data set.
+
+The first plot, __Residuals vs fitted__ plot, shows if residuals have non-linear patterns. Fitted values are on the X axis and the residuals (that is, how far the fitted values are from the observed values) are on the Y axis. There could be a non linear relationship between predictor variables and the response variable, and the pattern could show up in this plot if the model doesn't capture the non-linear relationship. If we find equally spaced residuals around the horizontal line without distinct patterns, that is a good indication we don't have non linear relationships. In our plot we don't see any distinctive patterns.
+
+The second plot, __Normal Q-Q__ plot, shows if residuals are normally distributed. Do the residuals follow a straight line, or do they deviate severely? It's good if residuals are lined well on the straight dashed line, but in reality, we will see some deviations. In our plot we don't see much deviation until towards the end, where some data points are deviating.
+
+The third plot, __Scale-Location__ plot, shows if residuals are spread equally along the ranges of predictors. This is how we can check the assumption of equal variance. It's good if we see a horizontal line with equally or randomly spread points. In our model the residuals appear randomly spread.
+
+The last plot, __Residuals vs Leverage__ plot, helps us to find influential cases in our data set. These cases could be extreme cases against the regression line and can alter the results if we exclude them from our model. In this plot, patterns are not relevant. We should watch out for outlying values at the upper right corner or the lower right corner. Those spots are the places where the cases can be influential against the regression line. Look for cases outside of a dash line, the Cook's distance. When cases are outside of the Cook's distance, meaning they have high Cook's distance scores, the cases are influential to the regression results. In our model, we can see observation number 6519 and 6522 are far beyond the Cook's distance lines. These are influential cases and will alter our model if we remove them.
+
+
+The 4 plots show potential problematic cases with the row numbers of the data in our data set. If some cases are identified across all 4 plots, we might want to take a closer look at them. Is there anything special about those points? Or could they just be simply errors in data entry? Our current model might not be the best way to understand our data, and w may need to revisit the model building step. We can try including or excluding predictors and see if the diagnostic plots improve.
+
+
+## Task 6 - Predict future values and calculate model error metrics
+In this final task we will predict future values and calculate model error metrics. 
+
+Using a regression model, you can predict future values and utilize these predictions in your business. For example, these predictions could be the number of sales in the next month or the amount of rain to fall tomorrow. Using the predictive values and the observed values, you can also assess your model's performance and calculate error metrics such as mean absolute error and root mean squared error. Great, let's get into it! You will predict the MSRP values of the test data set and compare it with the observed MSRP values. You can use the predict() function with the parameters - model and test data.
+```{r}
+test$pred <- predict(model, newdata = test)
+```
+We are storing the predicted values in a new column called pred in the test data set.
+
+Next, we can plot the predicted and observed MSRP values using ggplot. But before we do that, we have to reset our plotting pane to one plot per pane.
+```{r}
+par(mfrow=c(1,1))
+```
+```{r}
+ggplot(test, aes(x = MSRP, y = pred)) +
+  geom_point() + 
+  geom_smooth(method = 'lm', color = "blue") +
+  theme_bw()
+```
+On the X axis, you can see the observed MSRP value and on the Y axis it, the predicted values.
+The blue line is a regression line between the predicted and observed values.
+
+Next, we will calculate the error metrics of the linear model. we will first find the error, which is each observed value subtracted from the respective predicted value.
+```{r}
+error <- test$pred - test$MSRP
+```
+We would calculate two error metrics. The first is **root mean square error** or  __RMSE__. 
+
+RMSE is a good measure of how accurately the model predicts the response and it is the most important criteria for fit if the main purpose of the model is prediction.
+```{r}
+rmse <- sqrt(mean(error^2))
+rmse
+```
+Our model's RMSE value is 5546.37 which is fine, given that the  range of our MSRP value in our dataset is between 15,000 and 50,000.
+
+The second error metric is **mean absolute error** or __MAE__. 
+
+MAE measures the average magnitude of the errors in our predictions without considering their direction.
+```{r}
+mae <- mean(abs(error))
+mae
+```
+Our model's mean absolute error (MAE) is 4401 which means that on average we would expect an error magnitude of 4401 in our predictions. This error can either be positive or negative.
+
+In RMSE, since the errors are squared before they are averaged, the RMSE gives a relatively high weight to large errors. This means the RMSE should be more useful when large errors are particularly undesirable. But from an interpretation standpoint, mean absolute error (MAE) is better.
+
+
+__Note:__
+Other ways to compute for MAE is by loading the library "Metrics" and perform the function below:
+- mae(observed, predicted)
+Where:
+__mae__: function for MAE
+__observed__: observed values
+__predicted__: predicted values
+
+
+### End of project
